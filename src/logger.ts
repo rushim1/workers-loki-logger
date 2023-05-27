@@ -14,13 +14,14 @@ export interface LoggerReceiver {
 type Fetch = (input: Request | string, init?: RequestInit) => Promise<Response>;
 
 export interface LoggerConfig {
-  lokiSecret: string;
+  lokiSecret?: string;
   stream: { [p: string]: string };
   cloudflareContext?: {};
   lokiUrl?: string;
   fetch?: Fetch;
   mdc?: { [p: string]: string };
   logReceiver?: LoggerReceiver;
+  tenantId?: string,
   getTimeNanoSeconds?: (callCount: number) => number;
 }
 
@@ -34,9 +35,10 @@ export class Logger {
   private getTimeNanoSecondsCallCount: number = 0;
   private readonly mdc: Map<string, string>;
   private readonly stream: { [p: string]: string };
-  private readonly lokiSecret: string;
+  private readonly lokiSecret?: string;
   private readonly lokiUrl: string;
   private readonly fetch: Fetch;
+  private readonly tenantId?: string;
   private readonly cloudflareContext: {};
   private readonly loggerReceiver: LoggerReceiver;
   private readonly _getTimeNanoSeconds: (callCount: number) => number;
@@ -51,6 +53,7 @@ export class Logger {
     this.fetch = loggerConfig.fetch ?? ((input, init) => fetch(input, init));
     this.cloudflareContext = loggerConfig.cloudflareContext ?? {};
     this.loggerReceiver = loggerConfig.logReceiver ?? console;
+    this.tenantId = loggerConfig.tenantId
     this._getTimeNanoSeconds = loggerConfig.getTimeNanoSeconds ?? ((count) => Date.now() * 1000000 + count);
   }
 
@@ -89,17 +92,31 @@ export class Logger {
         },
       ],
     };
-    const saveLogsPromise = this.fetch(
-      `${this.lokiUrl}/loki/api/v1/push`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${this.lokiSecret}`,
-        },
-        body: JSON.stringify(request),
-      },
-    );
+    let headers: any = {
+      'Content-Type': 'application/json'
+    }
+    if (this.lokiSecret != null) {
+      headers['Authorization'] = `Basic ${this.lokiSecret}`
+    }
+    if (this.tenantId != null) {
+      headers['X-Scope-OrgID'] = this.tenantId
+    }
+    const saveLogsPromise = new Promise(async (resolve, reject) => {
+      try {
+        console.log(await this.fetch(
+          `${this.lokiUrl}/loki/api/v1/push`,
+          {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(request),
+          },
+        ));
+      } catch (e) {
+        console.log(e!.toString())
+      }
+      resolve("Success")
+    })
+    
     this.messages = [];
     if (isCloudflareContext(this.cloudflareContext)) {
       await this.cloudflareContext.waitUntil(saveLogsPromise);
