@@ -110,7 +110,7 @@ export class Logger {
             headers: headers,
             body: JSON.stringify(request),
           },
-        ));
+        ).then((res) => res.body));
       } catch (e) {
         console.log(e!.toString())
       }
