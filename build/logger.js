@@ -70,7 +70,7 @@ export class Logger {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(request),
-                }).then((res) => res.body));
+                }).then((res) => res));
             }
             catch (e) {
                 console.log(e.toString());
